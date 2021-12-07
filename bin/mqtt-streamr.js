@@ -7,9 +7,6 @@ const Logger = require('../src/Logger')
 
 require('console-stamp')(console, { pattern: 'yyyy-mm-dd HH:MM:ss' });
 
-
-var currentState = {}
-
 const streamCreateFutures = {}
 
 const options = require('yargs')
@@ -21,6 +18,20 @@ const options = require('yargs')
     .option('topic', {
         type: 'array',
         describe: 'Topic/path to subscribe to. Give this option multiple times to subscribe to several topics. Can include wildcards.',
+    })
+    .option('clientid', {
+        describe: 'MQTT ClientID for subscription',
+        default: 1
+    })
+    .option('qos', {
+        type: 'integer',
+        describe: 'Qos of the MQTT Subscription',
+        default: 1
+    })
+    .option('clean-session', {
+        type: 'boolean',
+        describe: 'Mqtt Clean Session Flag True or False',
+        default: false
     })
     .option('private-key', {
         default: undefined,
@@ -144,7 +155,17 @@ streamrClient.on('error', (err) => {
 let mqttClient
 const connectMqttClient = () => {
     console.log('Connecting to ', options['mqtt-url'])
-    mqttClient = mqtt.connect(options['mqtt-url'])
+    console.log('ClientID used: ', options['clientid'])
+    console.log('QOS used:  ', options['qos'])
+
+
+    let config = {
+        clientId: options['clientid'],
+        qos:  options['qos'],
+        clean: options['clean-session'] 
+      }
+
+    mqttClient = mqtt.connect(options['mqtt-url'], config)
 
     mqttClient.on('error', (err) => {
         console.error(err)
@@ -178,36 +199,9 @@ const connectMqttClient = () => {
             console.error('Message was not valid JSON. Ignoring: ', unparsedMessage)
             return
         }
-        
+
         if (transform) {
             parsedMessage = transform.evaluate(parsedMessage)
-        }
-        //update a map of values.
-        //{"_type":"engine_load","unit":"percent","value":7.8431372549019605}
-        //{"utc":"00:10:22","_type":"pos","cog":17.55,"sog":8.6,"loc":{"lat":42.31576,"lon":-83.70912},"alt":287.8,"_stamp":"2021-07-26T00:10:21.692362","nsat":8}
-        //{"tag":"vehicle/position/standstill","data":{"_stamp":"2021-07-26T00:10:37.361418"}}
-        //{"_type":"ambiant_air_temp","unit":"degC","value":28}
-        if(parsedMessage.hasOwnProperty('_type') ) {
-            type = parsedMessage._type;
-            value = parsedMessage.value;
-            if(type === 'pos') {
-                currentState.latitude = parsedMessage.loc.lat;
-                currentState.longitude = parsedMessage.loc.lon;
-                currentState.altitude = parsedMessage.alt;
-                currentState.ts = Date.now();
-                delete currentState.event;
-                //send now
-            }
-            else {
-                currentState[type] = value;
-                delete currentState.event;
-                return
-            }
-        }
-        else {
-            currentState.event = parsedMessage.tag;
-            currentState.ts = Date.now();
-            //sent now
         }
 
         let stream
@@ -242,7 +236,7 @@ const connectMqttClient = () => {
 
         try {
             if (!options['dry-run']) {
-                await streamrClient.publish(stream, currentState)
+                await streamrClient.publish(stream, parsedMessage)
             }
             logger.successIncrement()
         } catch (err) {
@@ -251,10 +245,5 @@ const connectMqttClient = () => {
 
     })
 }
-
-
-
-// const dataUnion = streamrClient.getDataUnion('0x0c3e414eb2891f536818e0031bda41038ccecca6')
-// dataUnion.join('O8ZEqGtjRCKBdcMNn_zcVwt1kZJO-LSU-w_0bNwLPB4A')
 
 connectMqttClient()
