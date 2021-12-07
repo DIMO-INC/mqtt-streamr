@@ -154,16 +154,16 @@ streamrClient.on('error', (err) => {
  */
 let mqttClient
 const connectMqttClient = () => {
-    console.log('Connecting to ', options['mqtt-url'])
-    console.log('ClientID used: ', options['clientid'])
-    console.log('QOS used:  ', options['qos'])
-
-
     let config = {
         clientId: options['clientid'],
         qos:  options['qos'],
         clean: options['clean-session'] 
       }
+    console.log('Connecting to ', options['mqtt-url'])
+    console.log('MQTT Connection Settings: ', config)
+
+
+
 
     mqttClient = mqtt.connect(options['mqtt-url'], config)
 
